@@ -1,8 +1,14 @@
 --BD Simon
 
 
-DROP TABLE NOTES;
+DROP TABLE MELODIE;
+DROP TABLE COUPS;
+DROP TABLE PARTIE;
+DROP TABLE JOUEUR;
+DROP TABLE COLLECTION;
 DROP TABLE NIVEAU;
+DROP TABLE NOTES;
+
 
 
 CREATE TABLE Notes(
@@ -66,7 +72,45 @@ CONSTRAINT fk_idpartiem foreign key (IdPartie) REFERENCES Partie(IdPartie),
 CONSTRAINT fk_numnotem foreign key (NumNote) REFERENCES Notes(NumNote)
 );
 
+insert into notes values(1, 'Do');
+insert into notes values(2, 'Re');
+insert into notes values(3, 'Mi');
+insert into notes values(4, 'Fa');
+insert into notes values(5, 'Sol');
+insert into notes values(6, 'La');
+insert into notes values(7, 'Ti');
+insert into notes values(8, 'Do');
 
+insert into Niveau values(1,6,3);
+
+insert into Joueur values('ElemCamilo',1,'electro@paradis.com','ElemThing');
+
+insert into Partie values(1,'ElemCamilo',1,'29/02/2000',9999);
+
+
+insert into melodie values(1,1,2,1);
+insert into melodie values(2,1,2,2);
+insert into melodie values(3,1,3,2);
+insert into melodie values(4,1,2,3);
+insert into melodie values(5,1,3,3);
+insert into melodie values(6,1,4,3);
+insert into melodie values(7,1,2,4);
+insert into melodie values(8,1,3,4);
+insert into melodie values(9,1,4,4);
+insert into melodie values(10,1,2,4);
+insert into melodie values(11,1,2,5);
+insert into melodie values(12,1,3,5);
+insert into melodie values(13,1,4,5);
+insert into melodie values(14,1,2,5);
+insert into melodie values(15,1,4,5);
+insert into melodie values(16,1,2,6);
+insert into melodie values(17,1,3,6);
+insert into melodie values(18,1,4,6);
+insert into melodie values(19,1,2,6);
+insert into melodie values(20,1,4,6);
+insert into melodie values(21,1,3,6);
+
+commit;
 
 
 
