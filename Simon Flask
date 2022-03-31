@@ -1,0 +1,265 @@
+@app.route("/")
+def new_old_user():
+    return render_template("new_old.html")
+
+
+@app.route("/inscription")
+def inscription_page():
+    message = ""
+    if 'username' in request.args:
+        connection = engine.raw_connection()    #On recupère son niveau
+        try:
+            cursor = connection.cursor()
+            pretour = cursor.var(cx_Oracle.NUMBER)  #variable OUT
+            cursor.callproc("Verif_pseudo", [str(request.args.get('username')), str(request.args.get('mdp')), pretour])
+            cursor.close()
+            connection.commit()
+        finally:
+            connection.close()
+        if pretour.values[0] == 0:
+            session['username'] = request.args.get('username')
+            connection = engine.raw_connection()    #On recupère son niveau
+            try:
+                cursor = connection.cursor()
+                niveau = cursor.var(cx_Oracle.NUMBER)  #variable OUT
+                cursor.callproc("Recup_Niveau", [session['username'], niveau])
+                cursor.close()
+                connection.commit()
+            finally:
+                connection.close() 
+            session['niveau'] = str(niveau.values[0])  #on definit dans la session le niveau de l'utilisateur connecté 
+            return render_template("connected.html", username = session['username'])
+        if pretour.values[0] == 1:
+            message = "Mot de passe invalide."
+            return render_template("inscription.html", message = Markup(message))
+        if pretour.values[0] == 2:
+            message = "Nom d'utilisateur non valide."
+    return render_template("inscription.html", message = Markup(message))
+
+
+@app.route("/connection")
+def connection_page():
+    if 'username' in session:
+        return render_template("connected.html", username=session['username'])
+    
+    if 'username' in request.args:
+        connection = engine.raw_connection()    #On recupère son niveau
+        try:
+            cursor = connection.cursor()
+            pretour = cursor.var(cx_Oracle.NUMBER)  #variable OUT
+            cursor.callproc("VERIF_CONNEXION", [str(request.args.get('username')), str(request.args.get('mdp')), pretour])
+            cursor.close()
+            connection.commit()
+        finally:
+            connection.close() 
+        if pretour.values[0] == 0:
+            session['username'] = request.args.get('username')
+            connection = engine.raw_connection()    #On recupère son niveau
+            try:
+                cursor = connection.cursor()
+                niveau = cursor.var(cx_Oracle.NUMBER)  #variable OUT
+                cursor.callproc("Recup_Niveau", [session['username'], niveau])
+                cursor.close()
+                connection.commit()
+            finally:
+                connection.close() 
+            session['niveau'] = str(niveau.values[0])  #on definit dans la session le niveau de l'utilisateur connecté 
+
+            return render_template("connected.html", username = session['username']) 
+        if pretour.values[0] == 1:
+            message = "Nom d'utilisateur inconnu."
+            return render_template("connection.html",message=Markup(message))
+        if pretour.values[0] == 2:
+            message = "Mot de passe incorrect."
+            return render_template("connection.html",message=Markup(message))
+    return render_template("connection.html",message="") 
+
+
+@app.route("/niveau")
+def niveau_page():
+    connection = engine.raw_connection()
+    try:
+        cursor = connection.cursor()    
+        nombre_de_niveaux = cursor.var(cx_Oracle.NUMBER)  #variable OUT
+        cursor.callproc("Recup_Nb_Niveaux", [nombre_de_niveaux])
+        cursor.close()
+        connection.commit()
+    finally:
+        connection.close()
+    
+    #On fait ça pour créer le choix de niveau dynamiquement
+    
+    code_html = "<form action='/newgame'> <label for='niveaux'>Choisir un niveau : </label> <select id='niveaux' name='niveaux'>"
+    for i in range(1, int(float(nombre_de_niveaux.values[0] + 1))):
+        code_html += "<option value='"+str(i)+"'>"+str(i)+"</option>"
+    code_html += "</select> <input type='submit'></form>"
+    print(session)
+    return render_template("niveau.html", content = Markup(code_html))
+
+
+@app.route("/newgame", methods = ['GET'])
+def newgame_page():
+    if 'coup' not in request.args:
+        connection = engine.raw_connection()
+        try:
+            cursor = connection.cursor()
+            partie_retour = cursor.var(cx_Oracle.NUMBER)  #variable OUT
+            cursor.callproc("Inserer_Partie", [session['username'], int(float(session['niveau'])), partie_retour])    
+            collection = cursor.var(cx_Oracle.NUMBER)  #variable OUT
+            cursor.callproc("Recup_taille_collection", [int(float(session['niveau'])), collection])
+            liste_m = list(range(1,int(collection.values[0]) + 1))
+            print(liste_m)
+            melodie = cursor.arrayvar(int, liste_m)  #variable OUT
+            cursor.callproc("melodieP.Recup_melodie", [int(float(session['niveau'])), melodie])
+            print("izi")
+            cursor.close()
+            connection.commit()
+        finally:
+            connection.close()
+        melodie = melodie.getvalue()  #melodie est une liste
+        session['melodie'] = melodie
+        session['i'] = 0   # iterateur de note de melodie
+        session['j'] = 0
+        session['partie'] =  int(float(partie_retour.values[0]))  #on définit la partie qui va être joué
+        return render_template("newgame.html", melodie = session['melodie'][:session['i'] + 1], indice = session['i'] + 1, score = 0)     
+        
+    
+    
+    coup = eval(request.args.get('coup'))
+
+    #on verifie que le joueur a joué les bonnes touches
+        
+    if len(coup) < len(session['melodie'][:session['i'] + 1]) or coup[-1] != session['melodie'][:session['i'] + 1][-1]:
+        #on insere le coup dans la bd si le joueur perd
+        connection = engine.raw_connection()
+        try:
+            cursor = connection.cursor()
+            cursor.callproc("Score", [int(float(session['partie'])), int(float(request.args.get('score')))])
+            #Pas de variables OUT
+            cursor.callproc("Coup.Inserer_Coup", [int(float(session['partie'])), coup, 0])
+            cursor.close()
+            connection.commit()
+        finally:
+            connection.close()
+        session['score'] = score
+        return render_template("perdu.html")
+    
+    #on insere le coup dans la bd si le joueur reste en jeu
+    connection = engine.raw_connection()
+    try:
+        cursor = connection.cursor()
+        cursor.callproc("Score", [int(float(session['partie'])), int(float(request.args.get('score')))])
+        #Pas de variables OUT
+        cursor.callproc("Coup.Inserer_Coup", [session['partie'], coup, 1])
+        cursor.close()
+        connection.commit()
+    finally:
+        connection.close() 
+    
+    #boucle de jeu 
+    
+    if session['i'] < len(session['melodie']) - 1: 
+        session['i'] += 1
+        return render_template("newgame.html", melodie = session['melodie'][:session['i'] + 1], indice = session['i'] + 1, score = int(float(request.args.get('score'))))
+    
+    
+    #si le joueur arrive à joeur la mélodie correctement on augmente son niveau
+    
+    connection = engine.raw_connection()
+    try:
+        cursor = connection.cursor()
+        #Pas de variables OUT
+        cursor.callproc("Aug_Niveau", [session['username']])
+        cursor.close()
+        connection.commit()
+    finally:
+        connection.close() 
+    session['score'] = score
+    return render_template("bravo.html")
+
+
+@app.route("/revoir_partie")
+def revoir_partie_page():
+    if 'partie' not in request.args:
+        code_html = "<strong><i>IdPartie Pseudo IdNiveau Jour Score</strong></i>"            
+        strSQL = "select * from Partie where pseudo ='"+session['username']+"' order by idpartie"
+        with engine.connect() as con:
+            code_html += "<form action='/revoir_partie'> <label for='partie'>Choisir une partie à revoir : </label> <select id='partie' name='partie'>"
+            rs = con.execute(strSQL)
+            for row in rs:
+                code_html += "<option value='"+str(row[0])+"'>"+str(row[0])+' '+str(row[1])+' '+str(row[2])+' '+str(row[3].strftime("%d/%m/%Y %H:%M:%S"))+' '+str(row[4])+"</option>"
+            code_html += "</select> <input type='submit'></form>"
+        return render_template("revoir_partie.html", content=Markup(code_html), flag = 0)
+    
+    connection = engine.raw_connection()
+    try:
+        cursor = connection.cursor()
+        coup_taille = cursor.var(cx_Oracle.NUMBER)  #variable OUT
+        cursor.callproc("Recup_taille_coup", [int(float(request.args.get('partie'))), coup_taille])
+        liste_c = list(range(1, int(coup_taille.values[0]) + 1))
+        coup = cursor.arrayvar(int, liste_c)  #variable OUT
+        cursor.callproc("PartieR.Recup_partie", [int(float(request.args.get('partie'))), coup])
+        cursor.close()
+        connection.commit()
+    finally:
+        connection.close()
+        print(coup.getvalue())
+    return render_template("revoir_partie.html",content = "", coup = coup.getvalue(), flag = 1)
+
+@app.route("/profile")
+def profile_page():
+    return render_template("profile.html", username=session['username'])
+
+@app.route("/highscores")
+def highscores_page():    #highscores fait avec de l'AJAX pour l'utiliser un peu même si on aurait pu faire le projet dans son intégralité sans de l'AJAX
+    code_html = "<tr><td>Top global</td>"
+    code_html += " <td><button type=\"button\" onclick=\"loadDoc('/topglobal?', myFunction)\">Afficher</button></td></tr>"    
+    code_html += "<tr><td>Top des 2 derniers jours</td> "
+    code_html += " <td><button id = \"b1\" type=\"button\" onclick=\"loadDoc('/topdj?jours=2', myFunction)\">Afficher</button></td></tr>"    
+    code_html += "<tr><td>Top par niveau</td></tr>"
+    return render_template("highscores.html", content=Markup(code_html))
+
+@app.route("/topdj")
+def topdj():
+    myjours = request.args.get('jours')
+    strSQL = "SELECT pseudo, jour, idniveau, score FROM PARTIE where jour > sysdate - "+str(myjours)+" group by pseudo, jour, idniveau, score having score > 0 order by idniveau desc, score desc"
+    code_html = ""
+    with engine.connect() as con:
+        rs = con.execute(strSQL)
+        for row in rs:
+            code_html += "<tr>"
+            for value in row:
+                code_html += "<td>"+str(value)+"</td>"
+            code_html += "</tr>"
+    return render_template("topdj.html", content=Markup(code_html))
+
+@app.route("/topglobal")
+def top_global():
+    strSQL = "SELECT pseudo, jour, idniveau, score FROM PARTIE group by pseudo, jour, idniveau, score having score > 0 order by idniveau desc, score desc"
+    code_html = ""
+    with engine.connect() as con:
+        rs = con.execute(strSQL)
+        for row in rs:
+            code_html += "<tr>"
+            for value in row:
+                code_html += "<td>"+str(value)+"</td>"
+            code_html += "</tr>"
+    return render_template("top_global.html", content=Markup(code_html))
+
+@app.route("/bravo")
+def bravo_page():
+    return render_template("bravo.html", username=session['username'], niveau=session['niveau'], score=session['score'])
+
+@app.route("/perdu")
+def perdu_page():
+    return render_template("perdu.html", username=session['username'], niveau=session['niveau'], score=session['score'])
+
+@app.route("/logout")
+def logout_page():
+    session.pop('username', None)
+    session.pop('niveau', None) 
+    session.pop('partie', None) 
+    session.pop('melodie', None)
+    session.pop('i', None)
+    session.pop('j', None)
+    return render_template("new_old.html"
