@@ -44,3 +44,22 @@ if (:new.Idniveau > vniv) then
 end if;
 end;
 /
+
+create or replace trigger t_a_u_NiveauMax
+after update on partie
+for each row
+
+declare
+vidniv joueur.idneau%type;
+
+begin
+select idniveau into vidniv from joueur
+where pseudo = :new.pseudo;
+
+if vidniv = :new.idniveau and :new.score > 0 then
+    update joueur set idniveau = idniveau + 1 
+    where :new.pseudo = pseudo and vidniv < 4;
+end if;
+
+end;
+/
