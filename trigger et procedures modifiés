@@ -1,0 +1,46 @@
+--procédures modifié pour utiliser le trigger niveau --
+create or replace PROCEDURE Inserer_Partie(vPseudo IN Joueur.Pseudo%TYPE, vNiveau IN joueur.idniveau%TYPE, vNumpartie OUT Partie.Idpartie%TYPE) AS
+
+pragma exception_init(locked_level,-20100)
+
+BEGIN
+
+select max(IdPartie) 
+into vNumpartie 
+from Partie; 
+
+if vNumpartie is null then
+    vNumpartie := 1;
+else
+    vNumpartie := vNumpartie + 1;
+end if;
+
+INSERT INTO Partie 
+Values (vNumpartie, vPseudo, vNiveau, TO_CHAR(SYSDATE, 'DD/MM/YYYY HH24:MI:SS'), 0);
+
+EXCEPTION
+
+when locked_level then
+dbms_output.put_line('Le niveua choisi n est pas encore debloqué');
+
+COMMIT;
+
+END;
+
+--Trigger pour vérifier si le niveau choisi est débloqué ou pas--
+create or replace trigger t_b_i_Niveau
+before insert on PARTIE
+for each row
+
+declare
+vniv joueur.idniv%TYPE;
+
+begin
+select Idniveau into vniv from Joueur
+where pseudo = :new.pseudo;
+
+if (:new.Idniveau > vniv) then
+    raise_application_error(-20100, 'le niveau n est pas débloqué');
+end if;
+end;
+/
