@@ -33,7 +33,7 @@ before insert on PARTIE
 for each row
 
 declare
-vniv joueur.idniv%TYPE;
+vniv joueur.idniveau%TYPE;
 
 begin
 select Idniveau into vniv from Joueur
